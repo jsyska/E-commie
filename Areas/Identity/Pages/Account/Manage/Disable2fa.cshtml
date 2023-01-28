@@ -6,10 +6,11 @@
 }
 
 <partial name="_StatusMessage" for="StatusMessage" />
-<h3>@ViewData["Title"]</h3>
+<h1>@ViewData["Title"]</h1>
 
 <div class="alert alert-warning" role="alert">
     <p>
+        <span class="glyphicon glyphicon-warning-sign"></span>
         <strong>This action only disables 2FA.</strong>
     </p>
     <p>
@@ -19,7 +20,7 @@
 </div>
 
 <div>
-    <form method="post">
+    <form method="post" class="form-group">
         <button class="btn btn-danger" type="submit">Disable 2FA</button>
     </form>
 </div>

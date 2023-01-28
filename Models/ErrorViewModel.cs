@@ -1,8 +1,10 @@
-namespace E_commie.Models
+using System;
+
+namespace ECommie.Models
 {
     public class ErrorViewModel
     {
-        public string? RequestId { get; set; }
+        public string RequestId { get; set; }
 
         public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
     }
