@@ -1,87 +1,59 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using E_commie.Areas.Identity.Data;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
-using System.Security.Claims;
+using ECommie.Areas.Admin.Models;
+using ECommie.Data;
+using ECommie.Models;
 
-namespace E_commie.Areas.Identity.Pages.Account
+
+namespace ECommie.Areas.Identity.Pages.Account
 {
+    [AllowAnonymous]
     public class LoginModel : PageModel
     {
-        private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly SignInManager<IdentityUser> _signInManager;
         private readonly ILogger<LoginModel> _logger;
+        UserManager<IdentityUser> _userManager;
+        private ApplicationDbContext _db;
+        
 
-        public LoginModel(SignInManager<ApplicationUser> signInManager, ILogger<LoginModel> logger)
+        public LoginModel(SignInManager<IdentityUser> signInManager, ILogger<LoginModel> logger, UserManager<IdentityUser> userManager,ApplicationDbContext db)
         {
             _signInManager = signInManager;
+            _userManager = userManager;
             _logger = logger;
+            _db = db;
         }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         [BindProperty]
         public InputModel Input { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public IList<AuthenticationScheme> ExternalLogins { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public string ReturnUrl { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         [TempData]
         public string ErrorMessage { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public class InputModel
         {
-            /// <summary>
-            ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
             [Required]
             [EmailAddress]
             public string Email { get; set; }
 
-            /// <summary>
-            ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
             [Required]
             [DataType(DataType.Password)]
             public string Password { get; set; }
 
-            /// <summary>
-            ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
             [Display(Name = "Remember me?")]
             public bool RememberMe { get; set; }
         }
@@ -93,7 +65,7 @@ namespace E_commie.Areas.Identity.Pages.Account
                 ModelState.AddModelError(string.Empty, ErrorMessage);
             }
 
-            returnUrl ??= Url.Content("~/");
+            returnUrl = returnUrl ?? Url.Content("~/");
 
             // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
@@ -105,47 +77,30 @@ namespace E_commie.Areas.Identity.Pages.Account
 
         public async Task<IActionResult> OnPostAsync(string returnUrl = null)
         {
-            returnUrl ??= Url.Content("~/");
-
-            ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+            returnUrl = returnUrl ?? Url.Content("~/");
 
             if (ModelState.IsValid)
             {
                 // This doesn't count login failures towards account lockout
                 // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-                var user = await _signInManager.UserManager.FindByNameAsync(Input.Email);
-                if (user == null)
-                {
-                    ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                    return Page();
-                }
-
-                var result = await _signInManager.CheckPasswordSignInAsync(user, Input.Password, false);
+                var result = await _signInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
                 if (result.Succeeded)
                 {
-                    var claims = new List<Claim>
+                    var userInfo = _db.ApplicationUsers.FirstOrDefault(c => c.UserName.ToLower() == Input.Email.ToLower());
+                    var roleInfo = (from ur in _db.UserRoles
+                        join r in _db.Roles on ur.RoleId equals r.Id
+                        where ur.UserId == userInfo.Id
+                        select new SessionUserVm()
+                        {
+                            UserName = Input.Email,
+                            RoleName = r.Name
+                        }).FirstOrDefault();
+                    if(roleInfo != null)
                     {
-                        new Claim("amr", "pwd"),
-                    };
-
-                    var roles = await _signInManager.UserManager.GetRolesAsync(user);
-
-                    if (roles.Any())
-                    {
-                        //"Manager,User"
-                        var roleClaim = string.Join(",", roles);
-                        claims.Add(new Claim("Roles", roleClaim));
+                        HttpContext.Session.SetString("roleName", roleInfo.RoleName);
                     }
-
-                    await _signInManager.SignInWithClaimsAsync(user, Input.RememberMe, claims);
-
-                    _logger.LogInformation("User logged in.");
-                    return LocalRedirect(returnUrl);
-                }
-                if (result.Succeeded)
-                {
-                    _logger.LogInformation("User logged in.");
-                    return LocalRedirect(returnUrl);
+                       _logger.LogInformation("User logged in.");
+                   return LocalRedirect(returnUrl);
                 }
                 if (result.RequiresTwoFactor)
                 {

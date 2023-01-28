@@ -1,0 +1,29 @@
+﻿@model IEnumerable<ECommie.Models.OrderDetails>
+
+@{
+    ViewData["Title"] = "Order Details";
+}
+
+<h1>Order Details</h1>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Image</th>
+            <th>Product Name</th>
+            <th>Product Price</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                <img src="~/@item.Product.Image" height="100px" width="150px"/>
+                </td>
+                <td>@item.Product.Name</td>
+                <td>@item.Product.Price</td>
+            </tr>
+        }
+    </tbody>
+</table>
